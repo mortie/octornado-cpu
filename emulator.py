@@ -1,7 +1,69 @@
 #!/usr/bin/env python3
 
 import assembler as asm
-import sys
+
+def disassemble(hi, lo):
+    op = (hi & 0b11111000) >> 3
+    rc = (hi & 0b00000111)
+
+    if op == asm.INS_NOP:
+        name = "nop"
+    elif op == asm.INS_ADD:
+        name = "add"
+    elif op == asm.INS_SUB:
+        name = "sub"
+    elif op == asm.INS_XOR:
+        name = "xor"
+    elif op == asm.INS_NAND:
+        name = "nand"
+    elif op == asm.INS_OR:
+        name = "or"
+    elif op == asm.INS_AND:
+        name = "and"
+    elif op == asm.INS_SHR:
+        name = "shr"
+    elif op == asm.INS_CMP:
+        name = "cmp"
+    elif op == asm.INS_JC:
+        name = "jge"
+    elif op == asm.INS_JZ:
+        name = "jeq"
+    elif op == asm.INS_JNZC:
+        name = "jgt"
+    elif op == asm.INS_LD:
+        name = "ld"
+    elif op == asm.INS_ST:
+        name = "st"
+    elif op == asm.INS_JMPI:
+        name = "jmpi"
+    elif op == asm.INS_JCI:
+        name = "jgei"
+    elif op == asm.INS_JZI:
+        name = "jeqi"
+    elif op == asm.INS_JNZCI:
+        name = "jgti"
+    elif op == asm.INS_IMM:
+        name = "imm"
+    elif op == asm.INS_STI:
+        name = "sti"
+    elif op == asm.INS_HALT:
+        name = "halt"
+    else:
+        raise Exception("Illegal instruction: " + hex(op))
+
+    if op >= asm.INS_IMM_START and op <= asm.INS_IMM_END:
+        return f"{name} r{rc} {lo}"
+    else:
+        isel = (lo & 0b10000000) >> 7
+        csel = (lo & 0b01000000) >> 6
+        ra =   (lo & 0b00111000) >> 3
+        rb =   (lo & 0b00000111)
+        if csel:
+            name += "c"
+        if isel:
+            return f"{name} r{rc} r{ra} {rb}"
+        else:
+            return f"{name} r{rc} r{ra} r{rb}"
 
 class CPU:
     def __init__(self):
@@ -28,7 +90,7 @@ class CPU:
         op = (hi & 0b11111000) >> 3
         rc = (hi & 0b00000111)
 
-        if op >= 0b10000 and op <= 0b10101:
+        if op >= asm.INS_IMM_START and op <= asm.INS_IMM_END:
             imm = lo
         else:
             isel = (lo & 0b10000000) >> 7
@@ -116,16 +178,29 @@ class CPU:
         self.zflag = 1 if (out & 0b11111111) == 0 else 0
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: " + sys.argv[0] + " <infile>")
-        exit(1)
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("infile", help="Input file to execute")
+    parser.add_argument("--step", default=False, action="store_true", help="Step through the program")
+    args = parser.parse_args()
 
     cpu = CPU()
-    with open(sys.argv[1], "rb") as f:
+    with open(args.infile, "rb") as f:
         cpu.load_program(f.read())
 
-    while not cpu.halted:
-        cpu.step()
+    if args.step:
+        while not cpu.halted:
+            print(cpu.ram)
+            print(
+                    f"{cpu.iptr}:",
+                    disassemble(cpu.ram[cpu.iptr], cpu.ram[cpu.iptr + 1]),
+                    cpu.regs)
+            input()
+            cpu.step()
+    else:
+        while not cpu.halted:
+            cpu.step()
 
     print("Registers after execution:")
     print(cpu.regs)
