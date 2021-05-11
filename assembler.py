@@ -21,6 +21,9 @@ def tokenize_line(line):
             idx += 1
             continue
 
+        if line[idx] == '#':
+            break
+
         if line[idx] == '\'':
             idx += 1
             if line[idx] == '\'':
