@@ -36,7 +36,7 @@ def parse_arg(arg, defines):
     elif arg == "r7":
         return (TAG_REG, 7)
     elif arg in defines:
-        return (TAG_INT, defines[arg])
+        return defines[arg]
     else:
         return (TAG_LABEL, arg)
 
@@ -74,7 +74,7 @@ def parse_line(line, defines, labels, iptr):
             return None
 
         if parts[0].endswith(":"):
-            labels[parts[1][:-1]] = iptr
+            labels[parts[0][:-1]] = iptr
             parts = parts[1:]
         else:
             break
@@ -135,38 +135,38 @@ def parse_line(line, defines, labels, iptr):
         return (FMT_R, INS_SHR, args[0], args[1], args[2], 1)
     elif op == "cmp":
         require_args(2)
-        return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2], 0)
+        return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1], 0)
     elif op == "cmpc":
         require_args(2)
         return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2], 1)
     elif (
-            op == "jmp" or op == "jc" or op == "jz" or op == "jnzc" or
-            op == "jgt" or op == "jge"):
+            op == "jmp" or op == "jc" or op == "jge"
+            or op == "jz" or op == "jeq" or op == "jnzc" or op == "jgt"):
         require_args(1, 2)
         if (
                 len(args) == 1 and
-                (args[0][0] == TAG_INT or args[0][1] == TAG_LABEL)):
+                (args[0][0] == TAG_INT or args[0][0] == TAG_LABEL)):
             if op == "jmp":
                 ins = INS_JMPI
             elif op == "jc" or op == "jge":
                 ins = INS_JCI
-            elif op == "jz":
+            elif op == "jz" or op == "jeq":
                 ins = INS_JZI
             elif op == "jnzc" or op == "jgt":
                 ins = INS_JNZCI
-            return (FMT_I, ins, (TAG_INT, 0), args[0])
+            return (FMT_I, ins, (TAG_REG, 0), args[0])
         else:
             if op == "jmp":
                 ins = INS_JMP
             elif op == "jc" or op == "jge":
                 ins = INS_JC
-            elif op == "jz":
+            elif op == "jz" or op == "jeq":
                 ins = INS_JZ
             elif op == "jnzc" or op == "jgt":
                 ins = INS_JNZC
 
             if len(args) == 1:
-                return (FMT_R, ins, (TAG_REG, 0), (TAG_REG, 0), args[0], 0)
+                return (FMT_R, ins, (TAG_REG, 0), args[0], (TAG_INT, 0), 0)
             else:
                 return (FMT_R, ins, (TAG_REG, 0), args[0], args[1], 0)
     elif op == "ld":
@@ -175,7 +175,7 @@ def parse_line(line, defines, labels, iptr):
     elif op == "st":
         require_args(1, 2)
         if len(args) == 1 and (args[0][0] == TAG_INT or args[0][0] == TAG_LABEL):
-            return (FMT_I, INS_STI, args[0])
+            return (FMT_I, INS_STI, (TAG_REG, 0), args[0])
         elif len(args) == 1:
             return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0], 0)
         else:
@@ -192,7 +192,7 @@ def serialize_instr(instr, defines, labels):
             if arg[1] in labels:
                 return (TAG_INT, labels[arg[1]])
             else:
-                raise AsmError("Unknown label: " + arg[0])
+                raise AsmError("Unknown label: " + arg[1])
         else:
             return arg
 
@@ -249,11 +249,8 @@ def assemble(inf, outf):
 
         if instr != None:
             instrs.append((linenum, instr))
-            iptr += 1
+            iptr += 2
         linenum += 1
-
-    # End the program with a halt
-    instrs.append((-1, parse_line("halt", defines, labels, iptr)))
 
     for linenum, instr in instrs:
         try:
