@@ -252,6 +252,9 @@ def assemble(inf, outf):
             iptr += 1
         linenum += 1
 
+    # End the program with a halt
+    instrs.append((-1, parse_line("halt", defines, labels, iptr)))
+
     for linenum, instr in instrs:
         try:
             bs = serialize_instr(instr, defines, labels)
