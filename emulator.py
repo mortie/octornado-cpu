@@ -22,6 +22,7 @@ class CPU:
     def step(self):
         hi = self.ram[self.iptr]
         lo = self.ram[self.iptr + 1]
+        iptr = self.iptr
         self.iptr = (self.iptr + 2) % 256
 
         op = (hi & 0b11111000) >> 3
@@ -52,7 +53,7 @@ class CPU:
             out = a + b + carry
             self.regs[rc] = out % 256
         elif op == asm.INS_SUB:
-            out = a - b + carry
+            out = a + (0b11111111 ^ b) + 1
             self.regs[rc] = out % 256
         elif op == asm.INS_XOR:
             out = a ^ b + carry
@@ -70,7 +71,7 @@ class CPU:
             out = ((a + b) >> 1) + carry
             self.regs[rc] = out % 256
         elif op == asm.INS_CMP:
-            out = a - b + carry
+            out = a + (0b11111111 ^ b) + 1
         elif op == asm.INS_JMP:
             out = a + b
             self.iptr = out % 256
@@ -109,7 +110,7 @@ class CPU:
         elif op == asm.INS_HALT:
             self.halted = True
         else:
-            raise Exception("Illegal instruction: " + hex(op))
+            raise Exception("Illegal instruction at " + str(iptr) + ": " + hex(op))
 
         self.cflag = (out & 0b100000000) >> 8
         self.zflag = 1 if (out & 0b11111111) == 0 else 0
