@@ -83,7 +83,7 @@ class CPU:
 
     def step(self):
         hi = self.ram[self.iptr]
-        lo = self.ram[self.iptr + 1]
+        lo = self.ram[(self.iptr + 1) % 256]
         iptr = self.iptr
         self.iptr = (self.iptr + 2) % 256
 
