@@ -104,6 +104,10 @@ def parse_line(line, defines, labels, iptr):
         return (FMT_R, INS_ADD, args[0], args[1], args[2], 1)
     elif op == "mov":
         require_args(2)
+        if args[1][0] == TAG_INT or args[1][0] == TAG_LABEL:
+            return (FMT_I, INS_IMM, args[0], args[1])
+        else:
+            return (FMT_R, INS_ADD, args[0], args[1], (TAG_INT, 0), 0)
         return (FMT_R, INS_ADD, args[0], (TAG_REG, 0), args[1], 0)
     elif op == "sub":
         require_args(3)
@@ -176,9 +180,6 @@ def parse_line(line, defines, labels, iptr):
             return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0], 0)
         else:
             return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1], 0)
-    elif op == "imm":
-        require_args(2)
-        return (FMT_I, INS_IMM, args[0], args[1])
     elif op == "halt":
         require_args(0)
         return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0), 0)
