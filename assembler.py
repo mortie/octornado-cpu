@@ -7,41 +7,88 @@ class AsmError(Exception):
 
 TAG_INT = 0
 TAG_REG = 1
-TAG_LABEL = 2
+TAG_STRING = 2
+TAG_LABEL = 3
 
-def parse_arg(arg, defines):
-    if arg[0].isnumeric():
-        if arg.startswith("0x"):
-            return (TAG_INT, int(arg[2:], 16))
-        elif arg.startswith("0b"):
-            return (TAG_INT, int(arg[2:], 2))
-        elif arg.startswith("0o"):
-            return (TAG_INT, int(arg[2:], 8))
+def tokenize_line(line):
+    idx = 0
+    def checkidx():
+        if idx >= len(line):
+            raise AsmError("Unexpected EOL")
+
+    while idx < len(line):
+        if line[idx].isspace():
+            idx += 1
+            continue
+
+        if line[idx] == '\'':
+            idx += 1
+            if line[idx] == '\'':
+                raise AsmError("Char literal needs contents")
+
+            if line[idx] == '\\':
+                idx += 1
+                checkidx()
+                if line[idx] == 'n':
+                    ch = '\n'
+                elif line[idx] == 'r':
+                    ch = '\r'
+                elif line[idx] == 't':
+                    ch = '\t'
+                elif line[idx] == '0':
+                    ch = '\0'
+                else:
+                    ch = line[idx]
+            else:
+                ch = line[idx]
+
+            idx += 1
+            checkidx()
+            if line[idx] != '\'':
+                raise AsmError("Missing closing quote in char literal")
+
+            yield (TAG_INT, ord(ch))
+            idx += 1
+            continue
+
+        start = idx
+        idx += 1
+        while idx <= len(line) and not line[idx].isspace():
+            idx += 1
+
+        part = line[start:idx]
+        if part.startswith("0x"):
+            yield (TAG_INT, int(part[2:], 16))
+        elif part.startswith("0b"):
+            yield (TAG_INT, int(part[2:], 2))
+        elif part.startswith("0o"):
+            yield (TAG_INT, int(part[2:], 8))
+        elif part.isnumeric():
+            yield (TAG_INT, int(part, 10))
+        elif part == "r0":
+            yield (TAG_REG, 0)
+        elif part == "r1":
+            yield (TAG_REG, 1)
+        elif part == "r2":
+            yield (TAG_REG, 2)
+        elif part == "r3":
+            yield (TAG_REG, 3)
+        elif part == "r4":
+            yield (TAG_REG, 4)
+        elif part == "r5":
+            yield (TAG_REG, 5)
+        elif part == "r6":
+            yield (TAG_REG, 6)
+        elif part == "r7":
+            yield (TAG_REG, 7)
+        elif part.endswith(":"):
+            yield (TAG_LABEL, part[:-1])
         else:
-            return (TAG_INT, int(arg, 10))
-    elif arg == "r0":
-        return (TAG_REG, 0)
-    elif arg == "r1":
-        return (TAG_REG, 1)
-    elif arg == "r2":
-        return (TAG_REG, 2)
-    elif arg == "r3":
-        return (TAG_REG, 3)
-    elif arg == "r4":
-        return (TAG_REG, 4)
-    elif arg == "r5":
-        return (TAG_REG, 5)
-    elif arg == "r6":
-        return (TAG_REG, 6)
-    elif arg == "r7":
-        return (TAG_REG, 7)
-    elif arg in defines:
-        return defines[arg]
-    else:
-        return (TAG_LABEL, arg)
+            yield (TAG_STRING, part)
 
 FMT_R = 0
 FMT_I = 1
+FMT_BYTE = 2
 
 INS_NOP = 0
 INS_ADD = 1
@@ -66,21 +113,27 @@ INS_IMM = 20
 INS_STI = 21
 INS_HALT = 31
 
+INS_IMM_START = INS_JMPI
+INS_IMM_END = INS_STI
+
 def parse_line(line, defines, labels, iptr):
-    parts = line.strip().split()
+    parts = list(tokenize_line(line))
 
-    while True:
-        if len(parts) == 0:
-            return None
+    while len(parts) > 0 and parts[0][0] == TAG_LABEL:
+        labels[parts[0][1]] = iptr
+        parts = parts[1:]
 
-        if parts[0].endswith(":"):
-            labels[parts[0][:-1]] = iptr
-            parts = parts[1:]
-        else:
-            break
+    if len(parts) == 0:
+        return None
 
-    op = parts[0].lower()
-    args = [parse_arg(part, defines) for part in parts[1:]]
+    if parts[0][0] != TAG_STRING:
+        raise AsmError("Op must be a string")
+    op = parts[0][1]
+
+    args = parts[1:]
+    for i in range(len(args)):
+        if args[i][0] == TAG_STRING and args[i][1] in defines:
+            args[i] = defines[args[i][1]]
 
     def require_args(*ns):
         for n in ns:
@@ -92,60 +145,62 @@ def parse_line(line, defines, labels, iptr):
         require_args(2)
         defines[parts[1]] = args[1]
         return None
-
+    if op == "byte":
+        require_args(1)
+        return (FMT_BYTE, args[0])
     if op == "nop":
         require_args(0)
         return (FMT_R, INS_NOP, (TAG_REG, 0), (TAG_INT, 0), (TAG_INT, 0), 0)
-    elif op == "add":
+    if op == "add":
         require_args(3)
         return (FMT_R, INS_ADD, args[0], args[1], args[2], 0)
-    elif op == "addc":
+    if op == "addc":
         require_args(3)
         return (FMT_R, INS_ADD, args[0], args[1], args[2], 1)
-    elif op == "mov":
+    if op == "mov":
         require_args(2)
-        if args[1][0] == TAG_INT or args[1][0] == TAG_LABEL:
+        if args[1][0] == TAG_INT or args[1][0] == TAG_STRING:
             return (FMT_I, INS_IMM, args[0], args[1])
         else:
             return (FMT_R, INS_ADD, args[0], args[1], (TAG_INT, 0), 0)
         return (FMT_R, INS_ADD, args[0], (TAG_REG, 0), args[1], 0)
-    elif op == "sub":
+    if op == "sub":
         require_args(3)
         return (FMT_R, INS_SUB, args[0], args[1], args[2], 0)
-    elif op == "subc":
+    if op == "subc":
         require_args(3)
         return (FMT_R, INS_SUB, args[0], args[1], args[2], 1)
-    elif op == "xor":
+    if op == "xor":
         require_args(3)
         return (FMT_R, INS_XOR, args[0], args[1], args[2], 0)
-    elif op == "nand":
+    if op == "nand":
         require_args(3)
         return (FMT_R, INS_NAND, args[0], args[1], args[2], 0)
-    elif op == "or":
+    if op == "or":
         require_args(3)
         return (FMT_R, INS_OR, args[0], args[1], args[2], 0)
-    elif op == "and":
+    if op == "and":
         require_args(3)
         return (FMT_R, INS_AND, args[0], args[1], args[2], 0)
-    elif op == "shr":
+    if op == "shr":
         require_args(3)
         return (FMT_R, INS_SHR, args[0], args[1], args[2], 0)
-    elif op == "shrc":
+    if op == "shrc":
         require_args(3)
         return (FMT_R, INS_SHR, args[0], args[1], args[2], 1)
-    elif op == "cmp":
+    if op == "cmp":
         require_args(2)
         return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1], 0)
-    elif op == "cmpc":
+    if op == "cmpc":
         require_args(2)
         return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2], 1)
-    elif (
+    if (
             op == "jmp" or op == "jc" or op == "jge"
             or op == "jz" or op == "jeq" or op == "jnzc" or op == "jgt"):
         require_args(1, 2)
         if (
                 len(args) == 1 and
-                (args[0][0] == TAG_INT or args[0][0] == TAG_LABEL)):
+                (args[0][0] == TAG_INT or args[0][0] == TAG_STRING)):
             if op == "jmp":
                 ins = INS_JMPI
             elif op == "jc" or op == "jge":
@@ -169,26 +224,26 @@ def parse_line(line, defines, labels, iptr):
                 return (FMT_R, ins, (TAG_REG, 0), args[0], (TAG_INT, 0), 0)
             else:
                 return (FMT_R, ins, (TAG_REG, 0), args[0], args[1], 0)
-    elif op == "ld":
+    if op == "ld":
         require_args(1)
         return (FMT_R, INS_LD, args[0], (TAG_REG, 0), (TAG_REG, 0), 0)
-    elif op == "st":
+    if op == "st":
         require_args(1, 2)
-        if len(args) == 1 and (args[0][0] == TAG_INT or args[0][0] == TAG_LABEL):
+        if len(args) == 1 and (args[0][0] == TAG_INT or args[0][0] == TAG_STRING):
             return (FMT_I, INS_STI, (TAG_REG, 0), args[0])
         elif len(args) == 1:
             return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0], 0)
         else:
             return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1], 0)
-    elif op == "halt":
+    if op == "halt":
         require_args(0)
         return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0), 0)
-    else:
-        raise AsmError("Unknown op " + op)
+
+    raise AsmError("Unknown op " + op)
 
 def serialize_instr(instr, defines, labels):
     def unlabel(arg):
-        if arg[0] == TAG_LABEL:
+        if arg[0] == TAG_STRING:
             if arg[1] in labels:
                 return (TAG_INT, labels[arg[1]])
             else:
@@ -196,6 +251,12 @@ def serialize_instr(instr, defines, labels):
         else:
             return arg
 
+    if instr[0] == FMT_BYTE:
+        fmt, b = instr
+        b = unlabel(b)
+        if b[0] != TAG_INT:
+            raise AsmError("Bytes must be known at compile time")
+        return bytes((b[1],))
     if instr[0] == FMT_I:
         fmt, op, rc, imm = instr
         imm = unlabel(imm)
@@ -211,7 +272,7 @@ def serialize_instr(instr, defines, labels):
         hi = (op << 3) | rc
         lo = imm
         return bytes((hi, lo))
-    elif instr[0] == FMT_R:
+    if instr[0] == FMT_R:
         fmt, op, rc, ra, rb, csel = instr
         isel = 0
         ra = unlabel(ra)
@@ -249,7 +310,10 @@ def assemble(inf, outf):
 
         if instr != None:
             instrs.append((linenum, instr))
-            iptr += 2
+            if instr[0] == FMT_BYTE:
+                iptr += 1
+            else:
+                iptr += 2
         linenum += 1
 
     for linenum, instr in instrs:
