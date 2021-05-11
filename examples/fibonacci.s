@@ -1,8 +1,9 @@
+# Initialization code to set up the stack and run 'fib(10)'
 	mov r7 stack_start
-	st retval
+	st retaddr
 	mov r1 10
 	jmp fib
-retval:
+retaddr:
 	halt
 
 fib:

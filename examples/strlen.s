@@ -1,7 +1,8 @@
-mov r7 stack_start
-st retaddr
-mov r1 data
-jmp strlen
+# Initialization code to set up the stack and run 'strlen(data)'
+	mov r7 stack_start
+	st retaddr
+	mov r1 data
+	jmp strlen
 retaddr:
 	halt
 
