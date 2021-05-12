@@ -158,6 +158,19 @@ class CPU:
         elif op == asm.INS_ST:
             out = a + b
             self.ram[self.regs[7]] = out % 256
+        elif op == asm.INS_ADDC:
+            out = a + b + self.cflag
+            self.regs[rc] = out % 256
+        elif op == asm.INS_SUBC:
+            out = a + (0b11111111 ^ b) + self.cflag
+            self.regs[rc] = out % 256
+        elif op == asm.INS_SHRC:
+            out = a + b
+            out >>= 1 | ((out & 0b1) << 8) # Put the shifted-out bit in cout
+            out |= self.cflag << 7 # Shifted-in number is carry flag
+            self.regs[rc] = out % 256
+        elif op == asm.INS_CMPC:
+            out = a + (0b11111111 ^ b) + self.cflag
         elif op == asm.INS_JMPI:
             self.iptr = imm
         elif op == asm.INS_JCI:

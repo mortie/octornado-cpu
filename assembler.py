@@ -200,9 +200,6 @@ def parse_line(line, defines, labels, iptr):
     if op == "cmp":
         require_args(2)
         return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1])
-    if op == "cmpc":
-        require_args(2)
-        return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2])
     if (
             op == "jmp" or op == "jc" or op == "jge"
             or op == "jz" or op == "jeq" or op == "jnzc" or op == "jgt"):
@@ -244,6 +241,18 @@ def parse_line(line, defines, labels, iptr):
             return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0])
         else:
             return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1])
+    if op == "addc":
+        require_args(3)
+        return (FMT_R, INS_ADDC, args[0], args[1], args[2])
+    if op == "subc":
+        require_args(3)
+        return (FMT_R, INS_SUBC, args[0], args[1], args[2])
+    if op == "shrc":
+        require_args(3)
+        return (FMT_R, INS_SHRC, args[0], args[1], args[2])
+    if op == "cmpc":
+        require_args(3)
+        return (FMT_R, INS_CMPC, args[0], args[1], args[2])
     if op == "halt":
         require_args(0)
         return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0))
