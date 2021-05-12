@@ -16,6 +16,18 @@ def tokenize_line(line):
         if idx >= len(line):
             raise AsmError("Unexpected EOL")
 
+    def parse_number(part):
+        if part.startswith("0x"):
+            return int(part[2:], 16)
+        elif part.startswith("0b"):
+            return int(part[2:], 2)
+        elif part.startswith("0o"):
+            return int(part[2:], 8)
+        elif part.isnumeric():
+            return int(part, 10)
+        else:
+            raise AsmError("Bad number literal")
+
     while idx < len(line):
         if line[idx].isspace():
             idx += 1
@@ -60,14 +72,10 @@ def tokenize_line(line):
             idx += 1
 
         part = line[start:idx]
-        if part.startswith("0x"):
-            yield (TAG_INT, int(part[2:], 16))
-        elif part.startswith("0b"):
-            yield (TAG_INT, int(part[2:], 2))
-        elif part.startswith("0o"):
-            yield (TAG_INT, int(part[2:], 8))
-        elif part.isnumeric():
-            yield (TAG_INT, int(part, 10))
+        if part[0].isnumeric():
+            yield (TAG_INT, parse_number(part))
+        elif len(part) >= 2 and part[0] == '-' and part[1].isnumeric():
+            yield (TAG_INT, -parse_number(part[1:]))
         elif part == "r0":
             yield (TAG_REG, 0)
         elif part == "r1":
@@ -108,12 +116,16 @@ INS_JZ = 11
 INS_JNZC = 12
 INS_LD = 13
 INS_ST = 14
-INS_JMPI = 16
-INS_JCI = 17
-INS_JZI = 18
-INS_JNZCI = 19
-INS_IMM = 20
-INS_STI = 21
+INS_ADDC = 15
+INS_SUBC = 16
+INS_SHRC = 17
+INS_CMPC = 18
+INS_JMPI = 19
+INS_JCI = 20
+INS_JZI = 21
+INS_JNZCI = 22
+INS_IMM = 23
+INS_STI = 24
 INS_HALT = 31
 
 INS_IMM_START = INS_JMPI
@@ -153,50 +165,44 @@ def parse_line(line, defines, labels, iptr):
         return (FMT_BYTE, args[0])
     if op == "nop":
         require_args(0)
-        return (FMT_R, INS_NOP, (TAG_REG, 0), (TAG_INT, 0), (TAG_INT, 0), 0)
+        return (FMT_R, INS_NOP, (TAG_REG, 0), (TAG_INT, 0), (TAG_INT, 0))
     if op == "add":
         require_args(3)
-        return (FMT_R, INS_ADD, args[0], args[1], args[2], 0)
-    if op == "addc":
-        require_args(3)
-        return (FMT_R, INS_ADD, args[0], args[1], args[2], 1)
+        return (FMT_R, INS_ADD, args[0], args[1], args[2])
     if op == "mov":
         require_args(2)
         if args[1][0] == TAG_INT or args[1][0] == TAG_STRING:
             return (FMT_I, INS_IMM, args[0], args[1])
         else:
-            return (FMT_R, INS_ADD, args[0], args[1], (TAG_INT, 0), 0)
-        return (FMT_R, INS_ADD, args[0], (TAG_REG, 0), args[1], 0)
+            return (FMT_R, INS_ADD, args[0], args[1], (TAG_INT, 0))
+        return (FMT_R, INS_ADD, args[0], (TAG_REG, 0), args[1])
     if op == "sub":
         require_args(3)
-        return (FMT_R, INS_SUB, args[0], args[1], args[2], 0)
+        return (FMT_R, INS_SUB, args[0], args[1], args[2])
     if op == "subc":
         require_args(3)
-        return (FMT_R, INS_SUB, args[0], args[1], args[2], 1)
+        return (FMT_R, INS_SUB, args[0], args[1], args[2])
     if op == "xor":
         require_args(3)
-        return (FMT_R, INS_XOR, args[0], args[1], args[2], 0)
+        return (FMT_R, INS_XOR, args[0], args[1], args[2])
     if op == "nand":
         require_args(3)
-        return (FMT_R, INS_NAND, args[0], args[1], args[2], 0)
+        return (FMT_R, INS_NAND, args[0], args[1], args[2])
     if op == "or":
         require_args(3)
-        return (FMT_R, INS_OR, args[0], args[1], args[2], 0)
+        return (FMT_R, INS_OR, args[0], args[1], args[2])
     if op == "and":
         require_args(3)
-        return (FMT_R, INS_AND, args[0], args[1], args[2], 0)
+        return (FMT_R, INS_AND, args[0], args[1], args[2])
     if op == "shr":
         require_args(3)
-        return (FMT_R, INS_SHR, args[0], args[1], args[2], 0)
-    if op == "shrc":
-        require_args(3)
-        return (FMT_R, INS_SHR, args[0], args[1], args[2], 1)
+        return (FMT_R, INS_SHR, args[0], args[1], args[2])
     if op == "cmp":
         require_args(2)
-        return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1], 0)
+        return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1])
     if op == "cmpc":
         require_args(2)
-        return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2], 1)
+        return (FMT_R, INS_CMP, (TAG_REG, 0), args[1], args[2])
     if (
             op == "jmp" or op == "jc" or op == "jge"
             or op == "jz" or op == "jeq" or op == "jnzc" or op == "jgt"):
@@ -224,23 +230,23 @@ def parse_line(line, defines, labels, iptr):
                 ins = INS_JNZC
 
             if len(args) == 1:
-                return (FMT_R, ins, (TAG_REG, 0), args[0], (TAG_INT, 0), 0)
+                return (FMT_R, ins, (TAG_REG, 0), args[0], (TAG_INT, 0))
             else:
-                return (FMT_R, ins, (TAG_REG, 0), args[0], args[1], 0)
+                return (FMT_R, ins, (TAG_REG, 0), args[0], args[1])
     if op == "ld":
         require_args(1)
-        return (FMT_R, INS_LD, args[0], (TAG_REG, 0), (TAG_REG, 0), 0)
+        return (FMT_R, INS_LD, args[0], (TAG_REG, 0), (TAG_REG, 0))
     if op == "st":
         require_args(1, 2)
         if len(args) == 1 and (args[0][0] == TAG_INT or args[0][0] == TAG_STRING):
             return (FMT_I, INS_STI, (TAG_REG, 0), args[0])
         elif len(args) == 1:
-            return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0], 0)
+            return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0])
         else:
-            return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1], 0)
+            return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1])
     if op == "halt":
         require_args(0)
-        return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0), 0)
+        return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0))
 
     raise AsmError("Unknown op " + op)
 
@@ -271,12 +277,14 @@ def serialize_instr(instr, defines, labels):
         if imm[0] != TAG_INT:
             raise AsmError("Immediate must me an integer")
         imm = imm[1]
+        if imm < 0:
+            imm = (~(-imm) + 1) % 256
 
         hi = (op << 3) | rc
         lo = imm
         return bytes((hi, lo))
     if instr[0] == FMT_R:
-        fmt, op, rc, ra, rb, csel = instr
+        fmt, op, rc, ra, rb = instr
         isel = 0
         ra = unlabel(ra)
         rb = unlabel(rb)
@@ -291,12 +299,16 @@ def serialize_instr(instr, defines, labels):
 
         if rb[0] == TAG_INT:
             isel = 1
-            if rb[1] < 0 or rb[1] > 7:
-                raise AsmError("Argument B must be between 0 and 7")
-        rb = rb[1]
+            if rb[1] < -8 or rb[1] > 7:
+                raise AsmError("Argument B must be between -8 and 7")
+            rb = rb[1]
+            if rb < 0:
+                rb = (~(-rb) + 1) % 16
+        else:
+            rb = rb[1]
 
         hi = (op << 3) | rc
-        lo = (isel << 7) | (csel << 6) | (ra << 3) | rb
+        lo = (isel << 7) | (ra << 4) | rb
         return bytes((hi, lo))
 
 def assemble(inf, outf):

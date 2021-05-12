@@ -34,6 +34,14 @@ def disassemble(hi, lo):
         name = "ld"
     elif op == asm.INS_ST:
         name = "st"
+    elif op == asm.INS_ADDC:
+        name = "addc"
+    elif op == asm.INS_SUBC:
+        name = "subc"
+    elif op == asm.INS_SHRC:
+        name = "shrc"
+    elif op == asm.INS_CMPC:
+        name = "cmpc"
     elif op == asm.INS_JMPI:
         name = "jmpi"
     elif op == asm.INS_JCI:
@@ -55,9 +63,8 @@ def disassemble(hi, lo):
         return f"{name} r{rc} {lo}"
     else:
         isel = (lo & 0b10000000) >> 7
-        csel = (lo & 0b01000000) >> 6
-        ra =   (lo & 0b00111000) >> 3
-        rb =   (lo & 0b00000111)
+        ra =   (lo & 0b01110000) >> 4
+        rb =   (lo & 0b00001111)
         if csel:
             name += "c"
         if isel:
@@ -94,43 +101,40 @@ class CPU:
             imm = lo
         else:
             isel = (lo & 0b10000000) >> 7
-            csel = (lo & 0b01000000) >> 6
-            ra =   (lo & 0b00111000) >> 3
-            rb =   (lo & 0b00000111)
+            ra =   (lo & 0b01110000) >> 4
+            rb =   (lo & 0b00001111)
             a = self.regs[ra]
             if isel:
                 b = rb
+                if b & 0b1000:
+                    b |= 0b11111000
             else:
-                b = self.regs[rb]
-
-            if csel:
-                carry = self.cflag
-            else:
-                carry = 0
+                b = self.regs[rb % 8]
 
         out = 0
         if op == asm.INS_NOP:
             pass
         elif op == asm.INS_ADD:
-            out = a + b + carry
+            out = a + b
             self.regs[rc] = out % 256
         elif op == asm.INS_SUB:
             out = a + (0b11111111 ^ b) + 1
             self.regs[rc] = out % 256
         elif op == asm.INS_XOR:
-            out = a ^ b + carry
+            out = a ^ b
             self.regs[rc] = out % 256
         elif op == asm.INS_NAND:
-            out = ~(a | b) + carry
+            out = ~(a | b)
             self.regs[rc] = out % 256
         elif op == asm.INS_OR:
-            out = (a | b) + carry
+            out = (a | b)
             self.regs[rc] = out % 256
         elif op == asm.INS_AND:
-            out = (a & b) + carry
+            out = (a & b)
             self.regs[rc] = out % 256
         elif op == asm.INS_SHR:
-            out = ((a + b) >> 1) + carry
+            out = a + b
+            out >>= 1 | ((out & 0b1) << 8) # Put the shifted-out bit in cout
             self.regs[rc] = out % 256
         elif op == asm.INS_CMP:
             out = a + (0b11111111 ^ b) + 1
