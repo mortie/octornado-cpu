@@ -24,12 +24,21 @@ def disassemble(hi, lo):
         name = "shr"
     elif op == asm.INS_CMP:
         name = "cmp"
-    elif op == asm.INS_JC:
-        name = "jge"
-    elif op == asm.INS_JZ:
-        name = "jeq"
-    elif op == asm.INS_JNZC:
-        name = "jgt"
+    elif op == asm.INS_JMP:
+        if rc == asm.JC_ALWAYS:
+            name = "jmp"
+        elif rc == asm.JC_JEQ:
+            name = "jeq"
+        elif rc == asm.JC_JGT:
+            name = "jgt"
+        elif rc == asm.JC_JGE:
+            name = "jge"
+        elif rc == asm.JC_JGTS:
+            name = "jgts"
+        elif rc == asm.JC_JGES:
+            name = "jges"
+        else:
+            raise Exception("Illegal jump condition: " + hex(rc))
     elif op == asm.INS_LD:
         name = "ld"
     elif op == asm.INS_ST:
@@ -43,13 +52,20 @@ def disassemble(hi, lo):
     elif op == asm.INS_CMPC:
         name = "cmpc"
     elif op == asm.INS_JMPI:
-        name = "jmpi"
-    elif op == asm.INS_JCI:
-        name = "jgei"
-    elif op == asm.INS_JZI:
-        name = "jeqi"
-    elif op == asm.INS_JNZCI:
-        name = "jgti"
+        if rc == asm.JC_ALWAYS:
+            name = "jmpi"
+        elif rc == asm.JC_JEQ:
+            name = "jeqi"
+        elif rc == asm.JC_JGT:
+            name = "jgti"
+        elif rc == asm.JC_JGE:
+            name = "jgei"
+        elif rc == asm.JC_JGTS:
+            name = "jgtsi"
+        elif rc == asm.JC_JGES:
+            name = "jgesi"
+        else:
+            raise Exception("Illegal jump condition: " + hex(rc))
     elif op == asm.INS_IMM:
         name = "imm"
     elif op == asm.INS_STI:
@@ -65,8 +81,6 @@ def disassemble(hi, lo):
         isel = (lo & 0b10000000) >> 7
         ra =   (lo & 0b01110000) >> 4
         rb =   (lo & 0b00001111)
-        if csel:
-            name += "c"
         if isel:
             return f"{name} r{rc} r{ra} {rb}"
         else:
@@ -79,7 +93,9 @@ class CPU:
         self.iptr = 0
         self.halted = False
         self.cflag = 0
+        self.sflag = 0
         self.zflag = 0
+        self.oflag = 0
 
     def load_program(self, bs):
         if len(bs) >= 256:
@@ -87,6 +103,22 @@ class CPU:
 
         for i, b in enumerate(bs):
             self.ram[i] = b
+
+    def jmp_cond(self, cond):
+        if cond == asm.JC_ALWAYS:
+            return True
+        elif cond == asm.JC_JEQ:
+            return self.zflag != 0
+        elif cond == asm.JC_JGT:
+            return self.cflag != 0 and self.zflag == 0
+        elif cond == asm.JC_JGE:
+            return self.cflag != 0
+        elif cond == asm.JC_JGTS:
+            return self.zflag == 0 and self.oflag == self.sflag
+        elif cond == asm.JC_JGES:
+            return self.oflag == self.sflag
+        else:
+            raise Exception("Illegal jump condition: " + hex(cond))
 
     def step(self):
         hi = self.ram[self.iptr]
@@ -99,6 +131,8 @@ class CPU:
 
         if op >= asm.INS_IMM_START and op <= asm.INS_IMM_END:
             imm = lo
+            a = 0
+            b = 0
         else:
             isel = (lo & 0b10000000) >> 7
             ra =   (lo & 0b01110000) >> 4
@@ -118,7 +152,8 @@ class CPU:
             out = a + b
             self.regs[rc] = out % 256
         elif op == asm.INS_SUB:
-            out = a + (0b11111111 ^ b) + 1
+            b = 0b11111111 ^ b
+            out = a + b + 1
             self.regs[rc] = out % 256
         elif op == asm.INS_XOR:
             out = a ^ b
@@ -137,21 +172,11 @@ class CPU:
             out >>= 1 | ((out & 0b1) << 8) # Put the shifted-out bit in cout
             self.regs[rc] = out % 256
         elif op == asm.INS_CMP:
-            out = a + (0b11111111 ^ b) + 1
+            b = 0b11111111 ^ b
+            out = a + b + 1
         elif op == asm.INS_JMP:
             out = a + b
-            self.iptr = out % 256
-        elif op == asm.INS_JC:
-            out = a + b
-            if self.cflag:
-                self.iptr = out % 256
-        elif op == asm.INS_JZ:
-            out = a + b
-            if self.zflag:
-                self.iptr = out % 256
-        elif op == asm.INS_JNZC:
-            out = a + b
-            if self.cflag and not self.zflag:
+            if self.jmp_cond(rc):
                 self.iptr = out % 256
         elif op == asm.INS_LD:
             self.regs[rc] = self.ram[self.regs[7]]
@@ -162,7 +187,8 @@ class CPU:
             out = a + b + self.cflag
             self.regs[rc] = out % 256
         elif op == asm.INS_SUBC:
-            out = a + (0b11111111 ^ b) + self.cflag
+            b = 0b11111111 ^ b
+            out = a + b + self.cflag
             self.regs[rc] = out % 256
         elif op == asm.INS_SHRC:
             out = a + b
@@ -170,17 +196,10 @@ class CPU:
             out |= self.cflag << 7 # Shifted-in number is carry flag
             self.regs[rc] = out % 256
         elif op == asm.INS_CMPC:
-            out = a + (0b11111111 ^ b) + self.cflag
+            b = 0b11111111 ^ b
+            out = a + b + self.cflag
         elif op == asm.INS_JMPI:
-            self.iptr = imm
-        elif op == asm.INS_JCI:
-            if self.cflag:
-                self.iptr = imm
-        elif op == asm.INS_JZI:
-            if self.zflag:
-                self.iptr = imm
-        elif op == asm.INS_JNZCI:
-            if self.cflag and not self.zflag:
+            if self.jmp_cond(rc):
                 self.iptr = imm
         elif op == asm.INS_IMM:
             self.regs[rc] = imm
@@ -192,7 +211,10 @@ class CPU:
             raise Exception("Illegal instruction at " + str(iptr) + ": " + hex(op))
 
         self.cflag = (out & 0b100000000) >> 8
+        self.sflag = (out & 0b10000000) >> 7
         self.zflag = 1 if (out & 0b11111111) == 0 else 0
+        overflowed = a & 0b10000000 == b & 0b10000000 and a & 0b10000000 != out & 0b10000000
+        self.oflag = 1 if overflowed else 0
 
 if __name__ == "__main__":
     import argparse
@@ -212,7 +234,8 @@ if __name__ == "__main__":
             print(
                     f"{cpu.iptr}:",
                     disassemble(cpu.ram[cpu.iptr], cpu.ram[cpu.iptr + 1]),
-                    cpu.regs)
+                    cpu.regs,
+                    f"z:{cpu.zflag} c:{cpu.cflag} s:{cpu.sflag} o:{cpu.oflag}")
             input()
             cpu.step()
     else:

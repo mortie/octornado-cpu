@@ -111,25 +111,26 @@ INS_AND = 6
 INS_SHR = 7
 INS_CMP = 8
 INS_JMP = 9
-INS_JC = 10
-INS_JZ = 11
-INS_JNZC = 12
-INS_LD = 13
-INS_ST = 14
-INS_ADDC = 15
-INS_SUBC = 16
-INS_SHRC = 17
-INS_CMPC = 18
-INS_JMPI = 19
-INS_JCI = 20
-INS_JZI = 21
-INS_JNZCI = 22
-INS_IMM = 23
-INS_STI = 24
+INS_LD = 10
+INS_ST = 11
+INS_ADDC = 12
+INS_SUBC = 13
+INS_SHRC = 14
+INS_CMPC = 15
+INS_JMPI = 16
+INS_IMM = 17
+INS_STI = 18
 INS_HALT = 31
 
 INS_IMM_START = INS_JMPI
 INS_IMM_END = INS_STI
+
+JC_ALWAYS = 0
+JC_JEQ = 1
+JC_JGT = 2
+JC_JGE = 3
+JC_JGTS = 4
+JC_JGES = 5
 
 def parse_line(line, defines, labels, iptr):
     parts = list(tokenize_line(line))
@@ -201,35 +202,32 @@ def parse_line(line, defines, labels, iptr):
         require_args(2)
         return (FMT_R, INS_CMP, (TAG_REG, 0), args[0], args[1])
     if (
-            op == "jmp" or op == "jc" or op == "jge"
-            or op == "jz" or op == "jeq" or op == "jnzc" or op == "jgt"):
+            op == "jmp" or op == "jeq" or
+            op == "jgt" or op == "jge" or
+            op == "jgts" or op == "jges"):
         require_args(1, 2)
+        if op == "jmp":
+            cond = JC_ALWAYS
+        elif op == "jeq":
+            cond = JC_JEQ
+        elif op == "jgt":
+            cond = JC_JGT
+        elif op == "jge":
+            cond = JC_JGE
+        elif op == "jgts":
+            cond = JC_JGTS
+        elif op == "jges":
+            cond = JC_JGES
+
         if (
                 len(args) == 1 and
                 (args[0][0] == TAG_INT or args[0][0] == TAG_STRING)):
-            if op == "jmp":
-                ins = INS_JMPI
-            elif op == "jc" or op == "jge":
-                ins = INS_JCI
-            elif op == "jz" or op == "jeq":
-                ins = INS_JZI
-            elif op == "jnzc" or op == "jgt":
-                ins = INS_JNZCI
-            return (FMT_I, ins, (TAG_REG, 0), args[0])
+            return (FMT_I, INS_JMPI, (TAG_REG, cond), args[0])
         else:
-            if op == "jmp":
-                ins = INS_JMP
-            elif op == "jc" or op == "jge":
-                ins = INS_JC
-            elif op == "jz" or op == "jeq":
-                ins = INS_JZ
-            elif op == "jnzc" or op == "jgt":
-                ins = INS_JNZC
-
             if len(args) == 1:
-                return (FMT_R, ins, (TAG_REG, 0), args[0], (TAG_INT, 0))
+                return (FMT_R, INS_JMP, (TAG_REG, cond), args[0], (TAG_INT, 0))
             else:
-                return (FMT_R, ins, (TAG_REG, 0), args[0], args[1])
+                return (FMT_R, INS_JMP, (TAG_REG, cond), args[0], args[1])
     if op == "ld":
         require_args(1)
         return (FMT_R, INS_LD, args[0], (TAG_REG, 0), (TAG_REG, 0))
