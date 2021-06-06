@@ -1,0 +1,19 @@
+mov r7 253
+
+mov r0 0x1a
+mov r1 0x5a
+
+loop:
+st 0x1d
+st r0
+st 0x5d
+st r1
+st 0x29
+st 0x39
+st 0x49
+st 0xff
+
+sub r0 r0 1
+sub r1 r1 1
+
+jmp loop
