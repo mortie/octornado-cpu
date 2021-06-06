@@ -10,7 +10,7 @@ TAG_REG = 1
 TAG_STRING = 2
 TAG_LABEL = 3
 
-def tokenize_line(line):
+def tokenize_line(line, defs):
     idx = 0
     def checkidx():
         if idx >= len(line):
@@ -92,6 +92,8 @@ def tokenize_line(line):
             yield (TAG_REG, 6)
         elif part == "r7":
             yield (TAG_REG, 7)
+        elif part in defs:
+            yield defs[part]
         elif part.endswith(":"):
             yield (TAG_LABEL, part[:-1])
         else:
@@ -133,7 +135,7 @@ JC_JGTS = 4
 JC_JGES = 5
 
 def parse_line(line, defines, labels, iptr):
-    parts = list(tokenize_line(line))
+    parts = list(tokenize_line(line, defines))
 
     while len(parts) > 0 and parts[0][0] == TAG_LABEL:
         labels[parts[0][1]] = iptr
@@ -147,9 +149,6 @@ def parse_line(line, defines, labels, iptr):
     op = parts[0][1]
 
     args = parts[1:]
-    for i in range(len(args)):
-        if args[i][0] == TAG_STRING and args[i][1] in defines:
-            args[i] = defines[args[i][1]]
 
     def require_args(*ns):
         for n in ns:
@@ -159,7 +158,9 @@ def parse_line(line, defines, labels, iptr):
 
     if op == "def":
         require_args(2)
-        defines[parts[1]] = args[1]
+        if parts[1][0] != TAG_STRING:
+            raise AsmError("Define name must be string")
+        defines[parts[1][1]] = args[1]
         return None
     if op == "byte":
         require_args(1)
@@ -236,7 +237,7 @@ def parse_line(line, defines, labels, iptr):
         if len(args) == 1 and (args[0][0] == TAG_INT or args[0][0] == TAG_STRING):
             return (FMT_I, INS_STI, (TAG_REG, 0), args[0])
         elif len(args) == 1:
-            return (FMT_R, INS_ST, (TAG_REG, 0), (TAG_REG, 0), args[0])
+            return (FMT_R, INS_ST, (TAG_REG, 0), args[0], (TAG_INT, 0))
         else:
             return (FMT_R, INS_ST, (TAG_REG, 0), args[0], args[1])
     if op == "addc":
