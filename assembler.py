@@ -181,9 +181,6 @@ def parse_line(line, defines, labels, iptr):
     if op == "sub":
         require_args(3)
         return (FMT_R, INS_SUB, args[0], args[1], args[2])
-    if op == "subc":
-        require_args(3)
-        return (FMT_R, INS_SUB, args[0], args[1], args[2])
     if op == "xor":
         require_args(3)
         return (FMT_R, INS_XOR, args[0], args[1], args[2])
