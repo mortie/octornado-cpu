@@ -66,9 +66,9 @@ Here's what the arguments mean:
 
 The legal syntaxes for label/immediate values are:
 
-	* `[0-9]+`: Decimal number
-	* `0x[0-9a-f]+`: Hexadecimal number
-	* `0b[01]+`: Binary number
-	* `0o[0-7]+`: Octal number
-	* `'.'`: ASCII character
-	* `[a-zA-Z_][a-zA-Z0-9_]*`: Either a label, or a defined value created by `def`
+* `[0-9]+`: Decimal number
+* `0x[0-9a-f]+`: Hexadecimal number
+* `0b[01]+`: Binary number
+* `0o[0-7]+`: Octal number
+* `'.'`: ASCII character
+* `[a-zA-Z_][a-zA-Z0-9_]*`: Either a label, or a defined value created by `def`
