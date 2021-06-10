@@ -122,6 +122,7 @@ INS_CMPC = 15
 INS_JMPI = 16
 INS_IMM = 17
 INS_STI = 18
+INS_RAND = 19
 INS_HALT = 31
 
 INS_IMM_START = INS_JMPI
@@ -249,6 +250,9 @@ def parse_line(line, defines, labels, iptr):
     if op == "cmpc":
         require_args(3)
         return (FMT_R, INS_CMPC, args[0], args[1], args[2])
+    if op == "rand":
+        require_args(1)
+        return (FMT_R, INS_RAND, args[0], (TAG_REG, 0), (TAG_REG, 0))
     if op == "halt":
         require_args(0)
         return (FMT_R, INS_HALT, (TAG_REG, 0), (TAG_REG, 0), (TAG_REG, 0))

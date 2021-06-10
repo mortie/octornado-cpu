@@ -2,6 +2,7 @@
 
 import assembler as asm
 import time
+import random
 
 def disassemble(hi, lo):
     op = (hi & 0b11111000) >> 3
@@ -73,6 +74,8 @@ def disassemble(hi, lo):
         name = "sti"
     elif op == asm.INS_HALT:
         name = "halt"
+    elif op == asm.INS_RAND:
+        name = "rand"
     else:
         raise Exception("Illegal instruction: " + hex(op))
 
@@ -235,6 +238,8 @@ class CPU:
             self.regs[rc] = imm
         elif op == asm.INS_STI:
             self.do_store(self.regs[7], imm)
+        elif op == asm.INS_RAND:
+            self.regs[rc] = random.randint(0, 255)
         elif op == asm.INS_HALT:
             self.halted = True
         else:
@@ -302,6 +307,8 @@ if __name__ == "__main__":
     parser.add_argument("infile", help="Input file to execute")
     parser.add_argument("--step", default=False, action="store_true", help="Step through the program")
     args = parser.parse_args()
+
+    random.seed()
 
     cpu = CPU()
     with open(args.infile, "rb") as f:
