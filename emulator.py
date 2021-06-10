@@ -279,14 +279,14 @@ class PixelDisplay:
                 return
 
             print("Pixel Display:")
-            print("+----------------+")
+            print("╔" + ("══" * self.width) + "╗")
             for y in range(0, self.height):
-                print("|", end="")
+                print("║", end="")
                 for x in range(0, self.width):
-                    print("#" if self.backbuffer[y][x] else " ", end="")
+                    print("██" if self.backbuffer[y][x] else "  ", end="")
                     self.backbuffer[y][x] = False
-                print("|")
-            print("+----------------+")
+                print("║")
+            print("╚" + ("══" * self.width) + "╝")
             time.sleep(0.5)
 
         else:
