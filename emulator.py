@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import assembler as asm
+import time
 
 def disassemble(hi, lo):
     op = (hi & 0b11111000) >> 3
@@ -90,6 +91,7 @@ class CPU:
     def __init__(self):
         self.regs = [0] * 8
         self.ram = [0] * 256
+        self.hardware = []
         self.iptr = 0
         self.halted = False
         self.cflag = 0
@@ -103,6 +105,9 @@ class CPU:
 
         for i, b in enumerate(bs):
             self.ram[i] = b
+
+    def add_hardware(self, addr, hw):
+        self.hardware.append((addr, hw))
 
     def jmp_cond(self, cond):
         if cond == asm.JC_ALWAYS:
@@ -119,6 +124,31 @@ class CPU:
             return self.oflag == self.sflag
         else:
             raise Exception("Illegal jump condition: " + hex(cond))
+
+    def do_load(self, addr):
+        val = 0
+        did_load = False
+        for hwaddr, hw in self.hardware:
+            if hwaddr == addr:
+                val |= hw.read()
+                did_load = True
+
+        if did_load:
+            return val
+        else:
+            return self.ram[addr]
+
+    def do_store(self, addr, val):
+        did_store = False
+        for hwaddr, hw in self.hardware:
+            if hwaddr == addr:
+                hw.write(val)
+                did_store = True
+
+        if did_store:
+            return
+        else:
+            self.ram[addr] = val
 
     def step(self):
         hi = self.ram[self.iptr]
@@ -179,10 +209,10 @@ class CPU:
             if self.jmp_cond(rc):
                 self.iptr = out % 256
         elif op == asm.INS_LD:
-            self.regs[rc] = self.ram[self.regs[7]]
+            self.regs[rc] = self.do_load(self.regs[7])
         elif op == asm.INS_ST:
             out = a + b
-            self.ram[self.regs[7]] = out % 256
+            self.do_store(self.regs[7], out % 256)
         elif op == asm.INS_ADDC:
             out = a + b + self.cflag
             self.regs[rc] = out % 256
@@ -204,7 +234,7 @@ class CPU:
         elif op == asm.INS_IMM:
             self.regs[rc] = imm
         elif op == asm.INS_STI:
-            self.ram[self.regs[7]] = imm
+            self.do_store(self.regs[7], imm)
         elif op == asm.INS_HALT:
             self.halted = True
         else:
@@ -215,6 +245,55 @@ class CPU:
         self.zflag = 1 if (out & 0b11111111) == 0 else 0
         overflowed = a & 0b10000000 == b & 0b10000000 and a & 0b10000000 != out & 0b10000000
         self.oflag = 1 if overflowed else 0
+
+class CharacterDisplay:
+    def read(self): return 0
+
+    def write(self, val):
+        print("Char Display:", chr(val))
+        time.sleep(0.2)
+
+class PixelDisplay:
+    width = 16
+    height = 15
+
+    def __init__(self):
+        self.backbuffer = []
+        self.used = False
+        for y in range(0, self.height):
+            arr = []
+            for x in range(0, self.width):
+                arr.append(False)
+            self.backbuffer.append(arr)
+
+    def read(self): return 0
+
+    def write(self, val):
+        if val == 0b11111111: # Display and clear the backbuffer
+            if not self.used:
+                # This is just an initial clear, don't print anything
+                for y in range(0, self.height):
+                    for x in range(0, self.width):
+                        self.backbuffer[y][x] = False
+                self.used = True
+                return
+
+            print("Pixel Display:")
+            print("+----------------+")
+            for y in range(0, self.height):
+                print("|", end="")
+                for x in range(0, self.width):
+                    print("#" if self.backbuffer[y][x] else " ", end="")
+                    self.backbuffer[y][x] = False
+                print("|")
+            print("+----------------+")
+            time.sleep(0.5)
+
+        else:
+            x = (val & 0b11110000) >> 4
+            y = (val & 0b00001111)
+            self.backbuffer[self.height - y - 1][x] = True
+            self.used = True
 
 if __name__ == "__main__":
     import argparse
@@ -227,6 +306,9 @@ if __name__ == "__main__":
     cpu = CPU()
     with open(args.infile, "rb") as f:
         cpu.load_program(f.read())
+
+    cpu.add_hardware(254, CharacterDisplay())
+    cpu.add_hardware(253, PixelDisplay())
 
     if args.step:
         while not cpu.halted:
