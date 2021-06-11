@@ -57,9 +57,9 @@ def write_rom(f, bs):
     nbt = NBT(f)
     nbt.start_named_tag(NBT_COMPOUND, "Schematic")
 
-    width = 68
+    width = len(bs) * 2
     height = 16
-    length = 19
+    length = 1
 
     nbt.start_named_tag(NBT_SHORT, "Width")
     nbt.write_short(width)
@@ -74,27 +74,17 @@ def write_rom(f, bs):
         nbt.start_named_tag(NBT_BYTE_ARRAY, name)
         nbt.start_byte_array(width * height * length)
         for x, y, z in nbt_range_xyz(width, height, length):
-            if z % 6 != 0:
+            if x % 2 == 0 or y % 2 == 0:
                 nbt.write_byte(0)
             else:
-                col = z // 6
-                offset = 0
-                if col > 0:
-                    offset = 4
-                if (col == 0 and x < 64 or col > 0 and x >= 4) \
-                   and x % 2 == 1 and y % 2 == 1:
-                        byteidx = (x - offset) // 2 + col * 32
-                        bitidx = y // 2
-                        if len(bs) <= byteidx:
-                            nbt.write_byte(0)
-                            continue
-                        bit = bs[byteidx] & (1 << bitidx)
-                        if bit:
-                            nbt.write_byte(BLOCK_ONE[p])
-                        else:
-                            nbt.write_byte(BLOCK_ZERO[p])
+                byteidx = int(x / 2)
+                bitidx = int(y / 2)
+                bit = bs[byteidx] & (1 << bitidx)
+                if bit:
+                    nbt.write_byte(BLOCK_ONE[p])
                 else:
-                    nbt.write_byte(0)
+                    nbt.write_byte(BLOCK_ZERO[p])
+
     nbt.write_end()
 
 if __name__ == "__main__":
