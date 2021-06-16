@@ -68,7 +68,7 @@ def tokenize_line(line, defs):
 
         start = idx
         idx += 1
-        while idx <= len(line) and not line[idx].isspace():
+        while idx < len(line) and not line[idx].isspace():
             idx += 1
 
         part = line[start:idx]
